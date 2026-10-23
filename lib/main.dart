@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const MyApp());
@@ -44,6 +45,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
   void initState() {
     super.initState();
     generateRandomNo();
+    checkActivationStatus();
     startLocalServer();
   }
 
@@ -58,6 +60,58 @@ class FuelFormScreenState extends State<FuelFormScreen> {
     setState(() {
       randomNo = random.nextInt(8999) + 1000;
     });
+  }
+
+  // Check 3 months validity and device activation status
+  Future<void> checkActivationStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    bool activated = prefs.getBool('is_activated') ?? false;
+    String? expiryStr = prefs.getString('expiry_date');
+
+    if (activated && expiryStr != null) {
+      DateTime expiryDate = DateTime.parse(expiryStr);
+      // Jodi current time expiry date-er age hoy, tahole activated thakbe
+      if (DateTime.now().isBefore(expiryDate)) {
+        setState(() {
+          isActivated = true;
+        });
+      } else {
+        // 3 mash sesh, abar lock hoye jabe
+        setState(() {
+          isActivated = false;
+        });
+      }
+    } else {
+      // Notun device ba first time install hole lock thakbe
+      setState(() {
+        isActivated = false;
+      });
+    }
+  }
+
+  // Password verify and 3 months expiry save korar function
+  Future<void> verifyAndActivate() async {
+    // Ekhane apnar nirdisto password "1234" set kora ache (apni change korte paren)
+    if (secretKeyController.text == "JBLAETC6564@Ba") {
+      final prefs = await SharedPreferences.getInstance();
+      // 3 mas (90 din) por expiry date set hochhe
+      DateTime expiryDate = DateTime.now().add(const Duration(days: 90));
+      
+      await prefs.setBool('is_activated', true);
+      await prefs.setString('expiry_date', expiryDate.toIso8601String());
+
+      setState(() {
+        isActivated = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Product Activated for 3 Months Successfully!")),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Incorrect Password! Try again.")),
+      );
+    }
   }
 
   Future<void> startLocalServer() async {
@@ -76,7 +130,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
         request.response
           ..headers.contentType = ContentType.json
           ..headers.add('Access-Control-Allow-Origin', '*')
-          ..headers.set('Server', 'Microsoft-HTTPAPI/2.0') // Desktop App Server Header Signature Added
+          ..headers.set('Server', 'Microsoft-HTTPAPI/2.0')
           ..write(jsonResponse)
           ..close();
       });
@@ -246,10 +300,8 @@ class FuelFormScreenState extends State<FuelFormScreen> {
   String getURLContents(String uri) {
     Map<String, dynamic> data = {};
     
-    // Requirement Validation Check
     if (uri == "/i3sys/gas") {
       if (selectedFuelType == 'diesel') {
-        // Diesel selected but Gas requested -> Do not send data
         setState(() {
           lastSentData = "Blocked: Gas requested but Diesel selected!";
         });
@@ -271,7 +323,6 @@ class FuelFormScreenState extends State<FuelFormScreen> {
       }
     } else if (uri == "/i3sys/smoke") {
       if (selectedFuelType != 'diesel') {
-        // Gas/Lambda selected but Smoke requested -> Do not send data
         setState(() {
           lastSentData = "Blocked: Smoke requested but Gas/Lambda selected!";
         });
@@ -286,8 +337,6 @@ class FuelFormScreenState extends State<FuelFormScreen> {
     }
 
     String finalJson = jsonEncode(data);
-    
-    // Successfully sending data -> update UI to show what data was sent
     setState(() {
       lastSentData = finalJson;
     });
@@ -314,6 +363,49 @@ class FuelFormScreenState extends State<FuelFormScreen> {
               child: Text(serverStatus, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 14)),
             ),
             const SizedBox(height: 10),
+            
+            // Security Activation Box (Jodi activated na thake ba lock thake)
+            if (!isActivated) ...[
+              Container(
+                padding: const EdgeInsets.all(12.0),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.red),
+                  borderRadius: BorderRadius.circular(8.0),
+                  color: Colors.red.shade50,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Please Activate Software", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                    const SizedBox(height: 8),
+                    const Text("Enter Password to Unlock (Valid for 3 Months):"),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: secretKeyController,
+                            obscureText: true,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              isDense: true,
+                              hintText: 'Enter Password',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        ElevatedButton(
+                          onPressed: verifyAndActivate,
+                          child: const Text("Go"),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+
             Container(
               padding: const EdgeInsets.all(8.0),
               decoration: BoxDecoration(
@@ -329,7 +421,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                           title: const Text('2 or 3 wheeler', style: TextStyle(fontSize: 12)),
                           value: '2or3wheeler',
                           groupValue: selectedFuelType,
-                          onChanged: (val) => setState(() => selectedFuelType = val!),
+                          onChanged: isActivated ? (val) => setState(() => selectedFuelType = val!) : null,
                         ),
                       ),
                       Expanded(
@@ -337,7 +429,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                           title: const Text('4 wheeler bs3', style: TextStyle(fontSize: 12)),
                           value: 'bs3',
                           groupValue: selectedFuelType,
-                          onChanged: (val) => setState(() => selectedFuelType = val!),
+                          onChanged: isActivated ? (val) => setState(() => selectedFuelType = val!) : null,
                         ),
                       ),
                     ],
@@ -349,7 +441,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                           title: const Text('Lambda', style: TextStyle(fontSize: 12)),
                           value: 'lambda',
                           groupValue: selectedFuelType,
-                          onChanged: (val) => setState(() => selectedFuelType = val!),
+                          onChanged: isActivated ? (val) => setState(() => selectedFuelType = val!) : null,
                         ),
                       ),
                       Expanded(
@@ -357,7 +449,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                           title: const Text('Diesel', style: TextStyle(fontSize: 12)),
                           value: 'diesel',
                           groupValue: selectedFuelType,
-                          onChanged: (val) => setState(() => selectedFuelType = val!),
+                          onChanged: isActivated ? (val) => setState(() => selectedFuelType = val!) : null,
                         ),
                       ),
                     ],
@@ -369,7 +461,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
             const Text("Last Sent Data to Website:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
             const SizedBox(height: 5),
             Container(
-              height: 80,
+              height: 70,
               padding: const EdgeInsets.all(8.0),
               decoration: BoxDecoration(
                 color: Colors.blue.shade50,
