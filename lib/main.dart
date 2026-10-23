@@ -62,7 +62,6 @@ class FuelFormScreenState extends State<FuelFormScreen> {
     });
   }
 
-  // Check 3 months validity and device activation status
   Future<void> checkActivationStatus() async {
     final prefs = await SharedPreferences.getInstance();
     bool activated = prefs.getBool('is_activated') ?? false;
@@ -70,31 +69,25 @@ class FuelFormScreenState extends State<FuelFormScreen> {
 
     if (activated && expiryStr != null) {
       DateTime expiryDate = DateTime.parse(expiryStr);
-      // Jodi current time expiry date-er age hoy, tahole activated thakbe
       if (DateTime.now().isBefore(expiryDate)) {
         setState(() {
           isActivated = true;
         });
       } else {
-        // 3 mash sesh, abar lock hoye jabe
         setState(() {
           isActivated = false;
         });
       }
     } else {
-      // Notun device ba first time install hole lock thakbe
       setState(() {
         isActivated = false;
       });
     }
   }
 
-  // Password verify and 3 months expiry save korar function
   Future<void> verifyAndActivate() async {
-    // Ekhane apnar nirdisto password "1234" set kora ache (apni change korte paren)
-    if (secretKeyController.text == "JBLAETC6564@Ba") {
+    if (secretKeyController.text == "1234") {
       final prefs = await SharedPreferences.getInstance();
-      // 3 mas (90 din) por expiry date set hochhe
       DateTime expiryDate = DateTime.now().add(const Duration(days: 90));
       
       await prefs.setBool('is_activated', true);
@@ -298,6 +291,14 @@ class FuelFormScreenState extends State<FuelFormScreen> {
   }
 
   String getURLContents(String uri) {
+    // SECURITY CHECK: Jodi app unactivated/locked thake, tahole kono data jabe na!
+    if (!isActivated) {
+      setState(() {
+        lastSentData = "Blocked: App is locked! Password required.";
+      });
+      return jsonEncode({"error": "App is locked. Authentication required."});
+    }
+
     Map<String, dynamic> data = {};
     
     if (uri == "/i3sys/gas") {
@@ -364,7 +365,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
             ),
             const SizedBox(height: 10),
             
-            // Security Activation Box (Jodi activated na thake ba lock thake)
+            // Password Box (Jodi activated na thake)
             if (!isActivated) ...[
               Container(
                 padding: const EdgeInsets.all(12.0),
@@ -376,9 +377,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("Please Activate Software", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
-                    const SizedBox(height: 8),
-                    const Text("Enter Password to Unlock (Valid for 3 Months):"),
+                    const Text("App Locked! Enter Password to Unlock (Valid for 3 Months):", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -396,7 +395,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                         const SizedBox(width: 10),
                         ElevatedButton(
                           onPressed: verifyAndActivate,
-                          child: const Text("Go"),
+                          child: const Text("Unlock"),
                         ),
                       ],
                     ),
@@ -406,73 +405,77 @@ class FuelFormScreenState extends State<FuelFormScreen> {
               const SizedBox(height: 10),
             ],
 
-            Container(
-              padding: const EdgeInsets.all(8.0),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: RadioListTile<String>(
-                          title: const Text('2 or 3 wheeler', style: TextStyle(fontSize: 12)),
-                          value: '2or3wheeler',
-                          groupValue: selectedFuelType,
-                          onChanged: isActivated ? (val) => setState(() => selectedFuelType = val!) : null,
+            // Jodi password sothik dewa hoy, tobei fuel selection options gulo show korbe
+            if (isActivated) ...[
+              Container(
+                padding: const EdgeInsets.all(8.0),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('2 or 3 wheeler', style: TextStyle(fontSize: 12)),
+                            value: '2or3wheeler',
+                            groupValue: selectedFuelType,
+                            onChanged: (val) => setState(() => selectedFuelType = val!),
+                          ),
                         ),
-                      ),
-                      Expanded(
-                        child: RadioListTile<String>(
-                          title: const Text('4 wheeler bs3', style: TextStyle(fontSize: 12)),
-                          value: 'bs3',
-                          groupValue: selectedFuelType,
-                          onChanged: isActivated ? (val) => setState(() => selectedFuelType = val!) : null,
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('4 wheeler bs3', style: TextStyle(fontSize: 12)),
+                            value: 'bs3',
+                            groupValue: selectedFuelType,
+                            onChanged: (val) => setState(() => selectedFuelType = val!),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: RadioListTile<String>(
-                          title: const Text('Lambda', style: TextStyle(fontSize: 12)),
-                          value: 'lambda',
-                          groupValue: selectedFuelType,
-                          onChanged: isActivated ? (val) => setState(() => selectedFuelType = val!) : null,
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('Lambda', style: TextStyle(fontSize: 12)),
+                            value: 'lambda',
+                            groupValue: selectedFuelType,
+                            onChanged: (val) => setState(() => selectedFuelType = val!),
+                          ),
                         ),
-                      ),
-                      Expanded(
-                        child: RadioListTile<String>(
-                          title: const Text('Diesel', style: TextStyle(fontSize: 12)),
-                          value: 'diesel',
-                          groupValue: selectedFuelType,
-                          onChanged: isActivated ? (val) => setState(() => selectedFuelType = val!) : null,
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('Diesel', style: TextStyle(fontSize: 12)),
+                            value: 'diesel',
+                            groupValue: selectedFuelType,
+                            onChanged: (val) => setState(() => selectedFuelType = val!),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            const Text("Last Sent Data to Website:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-            const SizedBox(height: 5),
-            Container(
-              height: 70,
-              padding: const EdgeInsets.all(8.0),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                border: Border.all(color: Colors.blue.shade200),
-                borderRadius: BorderRadius.circular(8.0),
+              const SizedBox(height: 10),
+              const Text("Last Sent Data to Website:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+              const SizedBox(height: 5),
+              Container(
+                height: 70,
+                padding: const EdgeInsets.all(8.0),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  border: Border.all(color: Colors.blue.shade200),
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: SingleChildScrollView(
+                  child: Text(lastSentData, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
+                ),
               ),
-              child: SingleChildScrollView(
-                child: Text(lastSentData, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
-              ),
-            ),
-            const SizedBox(height: 10),
+              const SizedBox(height: 10),
+            ],
+
             const Text("Incoming Server Requests Log:", style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 5),
             Expanded(
