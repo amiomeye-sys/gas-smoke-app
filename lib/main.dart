@@ -38,6 +38,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
   String serverStatus = 'Server Starting...';
   List<String> logMessages = [];
   int lambdaCount = 0;
+  String lastSentData = 'No data sent yet';
 
   @override
   void initState() {
@@ -59,7 +60,6 @@ class FuelFormScreenState extends State<FuelFormScreen> {
     });
   }
 
-  // C# app er moto port 5555 e local HTTP server start korar function
   Future<void> startLocalServer() async {
     try {
       _server = await HttpServer.bind(InternetAddress.anyIPv4, 5555);
@@ -244,7 +244,17 @@ class FuelFormScreenState extends State<FuelFormScreen> {
 
   String getURLContents(String uri) {
     Map<String, dynamic> data = {};
+    
+    // Requirement Validation Check
     if (uri == "/i3sys/gas") {
+      if (selectedFuelType == 'diesel') {
+        // Diesel selected but Gas requested -> Do not send data
+        setState(() {
+          lastSentData = "Blocked: Gas requested but Diesel selected!";
+        });
+        return jsonEncode({"error": "Invalid fuel type selection for gas endpoint"});
+      }
+
       if (selectedFuelType == '2or3wheeler') {
         data = getRandomPetrolData();
       } else if (selectedFuelType == 'bs3') {
@@ -259,11 +269,29 @@ class FuelFormScreenState extends State<FuelFormScreen> {
         lambdaCount++;
       }
     } else if (uri == "/i3sys/smoke") {
+      if (selectedFuelType != 'diesel') {
+        // Gas/Lambda selected but Smoke requested -> Do not send data
+        setState(() {
+          lastSentData = "Blocked: Smoke requested but Gas/Lambda selected!";
+        });
+        return jsonEncode({"error": "Invalid fuel type selection for smoke endpoint"});
+      }
+
       if (selectedFuelType == 'diesel') {
         data = getRandomDieselData();
       }
+    } else {
+      return jsonEncode({"error": "Unknown endpoint"});
     }
-    return jsonEncode(data);
+
+    String finalJson = jsonEncode(data);
+    
+    // Successfully sending data -> update UI to show what data was sent
+    setState(() {
+      lastSentData = finalJson;
+    });
+
+    return finalJson;
   }
 
   @override
@@ -284,7 +312,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
               ),
               child: Text(serverStatus, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 14)),
             ),
-            const SizedBox(height: 15),
+            const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.all(8.0),
               decoration: BoxDecoration(
@@ -336,7 +364,22 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 15),
+            const SizedBox(height: 10),
+            const Text("Last Sent Data to Website:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+            const SizedBox(height: 5),
+            Container(
+              height: 80,
+              padding: const EdgeInsets.all(8.0),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                border: Border.all(color: Colors.blue.shade200),
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+              child: SingleChildScrollView(
+                child: Text(lastSentData, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
+              ),
+            ),
+            const SizedBox(height: 10),
             const Text("Incoming Server Requests Log:", style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 5),
             Expanded(
