@@ -76,6 +76,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
         request.response
           ..headers.contentType = ContentType.json
           ..headers.add('Access-Control-Allow-Origin', '*')
+          ..headers.set('Server', 'Microsoft-HTTPAPI/2.0') // Desktop App Server Header Signature Added
           ..write(jsonResponse)
           ..close();
       });
