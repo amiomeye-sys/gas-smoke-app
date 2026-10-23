@@ -56,21 +56,25 @@ class FuelFormScreenState extends State<FuelFormScreen> {
   Map<String, dynamic> getRandomPetrolData() {
     final random = Random();
     String co = "${random.nextInt(1) + 1}.${random.nextInt(89) + 10}";
-    String co2 = "${(random.nextInt(5) + 7).toString().padLeft(2, '0')}.${random.nextInt(10)}";
+    String co2 =
+        "${(random.nextInt(5) + 7).toString().padLeft(2, '0')}.${random.nextInt(10)}";
     String hc = "${random.nextInt(1700) + 300}";
-    String o2 = "${random.nextInt(5) + 9}.${(random.nextInt(49) + 1).toString().padLeft(2, '0')}";
+    String o2 =
+        "${random.nextInt(5) + 9}.${(random.nextInt(49) + 1).toString().padLeft(2, '0')}";
 
     return {
       "CO": co,
       "CO2": co2,
-      "Date": "${DateTime.now().day.toString().padLeft(2, '0')}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().year}",
+      "Date":
+          "${DateTime.now().day.toString().padLeft(2, '0')}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().year}",
       "HC": hc,
       "Lambda": "6.525",
       "Lambda_CO": co,
       "O2": o2,
       "RPM": "0000",
       "Status": "OK",
-      "Time": "${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}",
+      "Time":
+          "${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}",
       "Reserve": "8",
     };
   }
@@ -80,14 +84,16 @@ class FuelFormScreenState extends State<FuelFormScreen> {
     int num = random.nextInt(12) + 8;
     double hu = (num + num + num) / 3.0;
     double p5 = kval(num.toDouble());
-    
+
     return {
-      "Date": "${DateTime.now().day.toString().padLeft(2, '0')}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().year}",
+      "Date":
+          "${DateTime.now().day.toString().padLeft(2, '0')}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().year}",
       "Test1": "TR01;${p5.toStringAsFixed(3)};750;2500;31",
       "Test_AVG": "#TA;${kval(hu).toStringAsFixed(3)}",
       "Test_Status": "#TS0",
       "Status": "OK",
-      "Time": "${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}",
+      "Time":
+          "${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}",
     };
   }
 
@@ -128,18 +134,22 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                     children: [
                       Expanded(
                         child: RadioListTile<String>(
-                          title: const Text('2 or 3 wheeler', style: TextStyle(fontSize: 12)),
+                          title: const Text('2 or 3 wheeler',
+                              style: TextStyle(fontSize: 12)),
                           value: '2or3wheeler',
                           groupValue: selectedFuelType,
-                          onChanged: (val) => setState(() => selectedFuelType = val!),
+                          onChanged: (val) =>
+                              setState(() => selectedFuelType = val!),
                         ),
                       ),
                       Expanded(
                         child: RadioListTile<String>(
-                          title: const Text('4 wheeler bs3', style: TextStyle(fontSize: 12)),
+                          title: const Text('4 wheeler bs3',
+                              style: TextStyle(fontSize: 12)),
                           value: 'bs3',
                           groupValue: selectedFuelType,
-                          onChanged: (val) => setState(() => selectedFuelType = val!),
+                          onChanged: (val) =>
+                              setState(() => selectedFuelType = val!),
                         ),
                       ),
                     ],
@@ -148,18 +158,22 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                     children: [
                       Expanded(
                         child: RadioListTile<String>(
-                          title: const Text('Lambda', style: TextStyle(fontSize: 12)),
+                          title: const Text('Lambda',
+                              style: TextStyle(fontSize: 12)),
                           value: 'lambda',
                           groupValue: selectedFuelType,
-                          onChanged: (val) => setState(() => selectedFuelType = val!),
+                          onChanged: (val) =>
+                              setState(() => selectedFuelType = val!),
                         ),
                       ),
                       Expanded(
                         child: RadioListTile<String>(
-                          title: const Text('Diesel', style: TextStyle(fontSize: 12)),
+                          title: const Text('Diesel',
+                              style: TextStyle(fontSize: 12)),
                           value: 'diesel',
                           groupValue: selectedFuelType,
-                          onChanged: (val) => setState(() => selectedFuelType = val!),
+                          onChanged: (val) =>
+                              setState(() => selectedFuelType = val!),
                         ),
                       ),
                     ],
@@ -178,20 +192,24 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("Please Activate Software", style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text("Please Activate Software",
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     const Text("Please Enter Secret Key"),
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Text(randomNo.toString(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        Text(randomNo.toString(),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 16)),
                         const SizedBox(width: 10),
                         SizedBox(
                           width: 100,
                           child: TextField(
                             controller: secretKeyController,
                             obscureText: true,
-                            decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+                            decoration: const InputDecoration(
+                                border: OutlineInputBorder(), isDense: true),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -201,7 +219,8 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                               isActivated = true;
                             });
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Product Activated")),
+                              const SnackBar(
+                                  content: Text("Product Activated")),
                             );
                           },
                           child: const Text("Go"),
@@ -212,7 +231,8 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                 ),
               ),
             const SizedBox(height: 20),
-            const Text("Generated JSON Output Test:", style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text("Generated JSON Output Test:",
+                style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
             Expanded(
               child: Container(
@@ -220,7 +240,9 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                 color: Colors.black12,
                 child: SingleChildScrollView(
                   child: Text(
-                    getURLContents(selectedFuelType == 'diesel' ? '/i3sys/smoke' : '/i3sys/gas'),
+                    getURLContents(selectedFuelType == 'diesel'
+                        ? '/i3sys/smoke'
+                        : '/i3sys/gas'),
                     style: const TextStyle(fontFamily: 'monospace'),
                   ),
                 ),
