@@ -74,12 +74,11 @@ class FuelFormScreenState extends State<FuelFormScreen> {
       final DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
       if (Platform.isAndroid) {
         AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-        deviceId = androidInfo.id; // Unique Hardware ID
+        deviceId = androidInfo.id;
       } else {
         deviceId = "NON_ANDROID_DEVICE";
       }
 
-      // Prothome local check
       final prefs = await SharedPreferences.getInstance();
       bool localActivated = prefs.getBool('is_activated') ?? false;
       String? expiryStr = prefs.getString('expiry_date');
@@ -95,7 +94,6 @@ class FuelFormScreenState extends State<FuelFormScreen> {
         }
       }
 
-      // Online Firestore Check
       await verifyLicenseOnline(silent: true);
     } catch (e) {
       setState(() {
@@ -132,7 +130,6 @@ class FuelFormScreenState extends State<FuelFormScreen> {
         Timestamp expiryTimestamp = data['expiry_date'];
         DateTime expiryDate = expiryTimestamp.toDate();
 
-        // Device Binding Check: Jodi device ID empty thake, tahole ei current device ID-ti bind kore nebo
         if (registeredDevice.isEmpty) {
           await FirebaseFirestore.instance.collection('licenses').doc(key).update({
             'device_id': deviceId,
@@ -140,7 +137,6 @@ class FuelFormScreenState extends State<FuelFormScreen> {
           registeredDevice = deviceId;
         }
 
-        // Check if device matches and not expired
         if (registeredDevice == deviceId && DateTime.now().isBefore(expiryDate)) {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool('is_activated', true);
@@ -152,7 +148,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
             isLoading = false;
           });
 
-          if (!silent) {
+          if (!silent && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("License Verified Successfully Online!")),
             );
@@ -162,7 +158,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
             isActivated = false;
             isLoading = false;
           });
-          if (!silent) {
+          if (!silent && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("Invalid Device or License Expired!")),
             );
@@ -173,7 +169,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
           isActivated = false;
           isLoading = false;
         });
-        if (!silent) {
+        if (!silent && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("License Key not found in server!")),
           );
@@ -183,7 +179,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
       setState(() {
         isLoading = false;
       });
-      if (!silent) {
+      if (!silent && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Connection Error: $e")),
         );
@@ -220,7 +216,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
 
   void addLog(String msg) {
     setState(() {
-      logMessages.insert(0, '${DateTime.now().toLocal().toString().split('.').first}:$msg');
+      logMessages.insert(0, '${DateTime.now().toLocal().toString().split('.').first}: $msg');
       if (logMessages.length > 50) logMessages.removeLast();
     });
   }
@@ -357,4 +353,226 @@ class FuelFormScreenState extends State<FuelFormScreen> {
 
     int t1 = random.nextInt(10) + 750;
     int t2 = t1 + random.nextInt(10);
-    int t3
+    int t3 = t1 + random.nextInt(10);
+    int avgT = (t1 + t2 + t3) ~/ 3;
+    int avgR = (r1 + r2 + r3) ~/ 3;
+
+    return {
+      "Date": "${DateTime.now().day.toString().padLeft(2, '0')}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().year}",
+      "Test1": "TR01;${p5.toStringAsFixed(3)};$t1;$r1;31",
+      "Test2": "TR02;${p6.toStringAsFixed(3)};$t2;$r2;31",
+      "Test3": "TR03;${p7.toStringAsFixed(3)};$t3;$r3;31",
+      "Test_AVG": "#TA;${huVal.toStringAsFixed(3)}",
+      "Test_Status": "#TS0",
+      "Flush_Cyl": "#PT;$avgT;$avgR;31",
+      "Status": "OK",
+      "Time": "${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}",
+    };
+  }
+
+  String getURLContents(String uri) {
+    if (!isActivated) {
+      setState(() {
+        lastSentData = "Blocked: App is locked! Online License required.";
+      });
+      return jsonEncode({"error": "App is locked. Remote authentication required."});
+    }
+
+    Map<String, dynamic> data = {};
+    
+    if (uri == "/i3sys/gas") {
+      if (selectedFuelType == 'diesel') {
+        setState(() {
+          lastSentData = "Blocked: Gas requested but Diesel selected!";
+        });
+        return jsonEncode({"error": "Invalid fuel type selection for gas endpoint"});
+      }
+
+      if (selectedFuelType == '2or3wheeler') {
+        data = getRandomPetrolData();
+      } else if (selectedFuelType == 'bs3') {
+        data = getRandomBs3PetrolData();
+      } else if (selectedFuelType == 'lambda') {
+        if (lambdaCount > 1) lambdaCount = 0;
+        if (lambdaCount == 0) {
+          data = getRandomLambdaIdleData();
+        } else {
+          data = getRandomLambdaHighData();
+        }
+        lambdaCount++;
+      }
+    } else if (uri == "/i3sys/smoke") {
+      if (selectedFuelType != 'diesel') {
+        setState(() {
+          lastSentData = "Blocked: Smoke requested but Gas/Lambda selected!";
+        });
+        return jsonEncode({"error": "Invalid fuel type selection for smoke endpoint"});
+      }
+
+      if (selectedFuelType == 'diesel') {
+        data = getRandomDieselData();
+      }
+    } else {
+      return jsonEncode({"error": "Unknown endpoint"});
+    }
+
+    String finalJson = jsonEncode(data);
+    setState(() {
+      lastSentData = finalJson;
+    });
+
+    return finalJson;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Gas Smoke App Server (Secure)")),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8.0),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      border: Border.all(color: Colors.green),
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                    child: Text(serverStatus, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 14)),
+                  ),
+                  const SizedBox(height: 10),
+                  
+                  if (!isActivated) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12.0),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.red),
+                        borderRadius: BorderRadius.circular(8.0),
+                        color: Colors.red.shade50,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text("App Locked! Enter Online License Key:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: licenseKeyController,
+                                  decoration: const InputDecoration(
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
+                                    hintText: 'Enter License Key (e.g. CLIENT001)',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              ElevatedButton(
+                                onPressed: () => verifyLicenseOnline(silent: false),
+                                child: const Text("Activate"),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 5),
+                          Text("Device ID: $deviceId", style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+
+                  if (isActivated) ...[
+                    Container(
+                      padding: const EdgeInsets.all(8.0),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey),
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: RadioListTile<String>(
+                                  title: const Text('2 or 3 wheeler', style: TextStyle(fontSize: 12)),
+                                  value: '2or3wheeler',
+                                  groupValue: selectedFuelType,
+                                  onChanged: (val) => setState(() => selectedFuelType = val!),
+                                ),
+                              ),
+                              Expanded(
+                                child: RadioListTile<String>(
+                                  title: const Text('4 wheeler bs3', style: TextStyle(fontSize: 12)),
+                                  value: 'bs3',
+                                  groupValue: selectedFuelType,
+                                  onChanged: (val) => setState(() => selectedFuelType = val!),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: RadioListTile<String>(
+                                  title: const Text('Lambda', style: TextStyle(fontSize: 12)),
+                                  value: 'lambda',
+                                  groupValue: selectedFuelType,
+                                  onChanged: (val) => setState(() => selectedFuelType = val!),
+                                ),
+                              ),
+                              Expanded(
+                                child: RadioListTile<String>(
+                                  title: const Text('Diesel', style: TextStyle(fontSize: 12)),
+                                  value: 'diesel',
+                                  groupValue: selectedFuelType,
+                                  onChanged: (val) => setState(() => selectedFuelType = val!),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text("Last Sent Data to Website:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                    const SizedBox(height: 5),
+                    Container(
+                      height: 70,
+                      padding: const EdgeInsets.all(8.0),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        border: Border.all(color: Colors.blue.shade200),
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      child: SingleChildScrollView(
+                        child: Text(lastSentData, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+
+                  const Text("Incoming Server Requests Log:", style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 5),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(8.0),
+                      color: Colors.black12,
+                      child: ListView.builder(
+                        itemCount: logMessages.length,
+                        itemBuilder: (context, index) {
+                          return Text(logMessages[index], style: const TextStyle(fontFamily: 'monospace', fontSize: 11));
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
