@@ -13,7 +13,7 @@ void main() async {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(
         options: const FirebaseOptions(
-          apiKey: "AIzaSyDIibBBvHyl9QsLihbODZWKQbF8TK9jGn8", // Firebase Console থেকে আপনার প্রজেক্টের API Key এখানে বসিয়ে দিন
+          apiKey: "YOUR_API_KEY_HERE",
           appId: "1:384435208754:android:9673b555c0ce1f1a3722b",
           messagingSenderId: "384435208754",
           projectId: "gassmokelicensing",
@@ -51,7 +51,7 @@ class FuelFormScreen extends StatefulWidget {
 }
 
 class FuelFormScreenState extends State<FuelFormScreen> {
-  String selectedFuelType = '2or3wheeler';
+  String selectedFuelType = 'lambda'; // Default to lambda
   int randomNo = 1000;
   final TextEditingController licenseKeyController = TextEditingController();
   bool isActivated = false;
@@ -145,7 +145,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp(
           options: const FirebaseOptions(
-            apiKey: "YOUR_API_KEY_HERE",
+            apiKey: "AIzaSyDIibBBvHyl9QsLihbODZWKQbF8TK9jGn8",
             appId: "1:384435208754:android:9673b555c0ce1f1a3722b",
             messagingSenderId: "384435208754",
             projectId: "gassmokelicensing",
@@ -277,50 +277,6 @@ class FuelFormScreenState extends State<FuelFormScreen> {
     }
   }
 
-  Map<String, dynamic> getRandomPetrolData() {
-    final random = Random();
-    String co = "${random.nextInt(1) + 1}.${random.nextInt(89) + 10}";
-    String co2 = "${(random.nextInt(5) + 7).toString().padLeft(2, '0')}.${random.nextInt(10)}${random.nextInt(10)}";
-    String hc = "${random.nextInt(1700) + 300}";
-    String o2 = "${random.nextInt(5) + 9}.${(random.nextInt(49) + 1).toString().padLeft(2, '0')}";
-
-    return {
-      "CO": co,
-      "CO2": co2,
-      "Date": "${DateTime.now().day.toString().padLeft(2, '0')}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().year}",
-      "HC": hc,
-      "Lambda": "6.525",
-      "Lambda_CO": co,
-      "O2": o2,
-      "RPM": "0000",
-      "Status": "OK",
-      "Time": "${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}",
-      "Reserve": "8",
-    };
-  }
-
-  Map<String, dynamic> getRandomBs3PetrolData() {
-    final random = Random();
-    String co = "0.${random.nextInt(30) + 10}";
-    String co2 = "${random.nextInt(2) + 13}.${random.nextInt(10)}${random.nextInt(10)}";
-    String hc = "${random.nextInt(500) + 150}";
-    String o2 = "${random.nextInt(4) + 1}.${random.nextInt(50).toString().padLeft(2, '0')}";
-
-    return {
-      "CO": co,
-      "CO2": co2,
-      "Date": "${DateTime.now().day.toString().padLeft(2, '0')}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().year}",
-      "HC": hc,
-      "Lambda": "6.553",
-      "Lambda_CO": co,
-      "O2": o2,
-      "RPM": "0000",
-      "Status": "OK",
-      "Time": "${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}",
-      "Reserve": "8",
-    };
-  }
-
   Map<String, dynamic> getRandomLambdaIdleData() {
     final random = Random();
     String co = "0.${random.nextInt(10) + 10}";
@@ -420,11 +376,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
         return jsonEncode({"error": "Invalid fuel type selection for gas endpoint"});
       }
 
-      if (selectedFuelType == '2or3wheeler') {
-        data = getRandomPetrolData();
-      } else if (selectedFuelType == 'bs3') {
-        data = getRandomBs3PetrolData();
-      } else if (selectedFuelType == 'lambda') {
+      if (selectedFuelType == 'lambda') {
         if (lambdaCount > 1) lambdaCount = 0;
         if (lambdaCount == 0) {
           data = getRandomLambdaIdleData();
@@ -436,7 +388,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
     } else if (uri == "/i3sys/smoke") {
       if (selectedFuelType != 'diesel') {
         setState(() {
-          lastSentData = "Blocked: Smoke requested but Gas/Lambda selected!";
+          lastSentData = "Blocked: Smoke requested but Lambda selected!";
         });
         return jsonEncode({"error": "Invalid fuel type selection for smoke endpoint"});
       }
@@ -525,47 +477,23 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                         border: Border.all(color: Colors.grey),
                         borderRadius: BorderRadius.circular(8.0),
                       ),
-                      child: Column(
+                      child: Row(
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: RadioListTile<String>(
-                                  title: const Text('2 or 3 wheeler', style: TextStyle(fontSize: 12)),
-                                  value: '2or3wheeler',
-                                  groupValue: selectedFuelType,
-                                  onChanged: (val) => setState(() => selectedFuelType = val!),
-                                ),
-                              ),
-                              Expanded(
-                                child: RadioListTile<String>(
-                                  title: const Text('4 wheeler bs3', style: TextStyle(fontSize: 12)),
-                                  value: 'bs3',
-                                  groupValue: selectedFuelType,
-                                  onChanged: (val) => setState(() => selectedFuelType = val!),
-                                ),
-                              ),
-                            ],
+                          Expanded(
+                            child: RadioListTile<String>(
+                              title: const Text('Lambda', style: TextStyle(fontSize: 12)),
+                              value: 'lambda',
+                              groupValue: selectedFuelType,
+                              onChanged: (val) => setState(() => selectedFuelType = val!),
+                            ),
                           ),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: RadioListTile<String>(
-                                  title: const Text('Lambda', style: TextStyle(fontSize: 12)),
-                                  value: 'lambda',
-                                  groupValue: selectedFuelType,
-                                  onChanged: (val) => setState(() => selectedFuelType = val!),
-                                ),
-                              ),
-                              Expanded(
-                                child: RadioListTile<String>(
-                                  title: const Text('Diesel', style: TextStyle(fontSize: 12)),
-                                  value: 'diesel',
-                                  groupValue: selectedFuelType,
-                                  onChanged: (val) => setState(() => selectedFuelType = val!),
-                                ),
-                              ),
-                            ],
+                          Expanded(
+                            child: RadioListTile<String>(
+                              title: const Text('Diesel', style: TextStyle(fontSize: 12)),
+                              value: 'diesel',
+                              groupValue: selectedFuelType,
+                              onChanged: (val) => setState(() => selectedFuelType = val!),
+                            ),
                           ),
                         ],
                       ),
