@@ -3,8 +3,13 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
@@ -33,19 +38,21 @@ class FuelFormScreen extends StatefulWidget {
 class FuelFormScreenState extends State<FuelFormScreen> {
   String selectedFuelType = '2or3wheeler';
   int randomNo = 1000;
-  final TextEditingController secretKeyController = TextEditingController();
+  final TextEditingController licenseKeyController = TextEditingController();
   bool isActivated = false;
+  bool isLoading = true;
   HttpServer? _server;
   String serverStatus = 'Server Starting...';
   List<String> logMessages = [];
-  int lambdaCount = 0;
   String lastSentData = 'No data sent yet';
+  String deviceId = '';
+  int lambdaCount = 0;
 
   @override
   void initState() {
     super.initState();
     generateRandomNo();
-    checkActivationStatus();
+    initializeDeviceAndCheckLicense();
     startLocalServer();
   }
 
@@ -62,48 +69,125 @@ class FuelFormScreenState extends State<FuelFormScreen> {
     });
   }
 
-  Future<void> checkActivationStatus() async {
-    final prefs = await SharedPreferences.getInstance();
-    bool activated = prefs.getBool('is_activated') ?? false;
-    String? expiryStr = prefs.getString('expiry_date');
-
-    if (activated && expiryStr != null) {
-      DateTime expiryDate = DateTime.parse(expiryStr);
-      if (DateTime.now().isBefore(expiryDate)) {
-        setState(() {
-          isActivated = true;
-        });
+  Future<void> initializeDeviceAndCheckLicense() async {
+    try {
+      final DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+      if (Platform.isAndroid) {
+        AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+        deviceId = androidInfo.id; // Unique Hardware ID
       } else {
-        setState(() {
-          isActivated = false;
-        });
+        deviceId = "NON_ANDROID_DEVICE";
       }
-    } else {
+
+      // Prothome local check
+      final prefs = await SharedPreferences.getInstance();
+      bool localActivated = prefs.getBool('is_activated') ?? false;
+      String? expiryStr = prefs.getString('expiry_date');
+
+      if (localActivated && expiryStr != null) {
+        DateTime expiryDate = DateTime.parse(expiryStr);
+        if (DateTime.now().isBefore(expiryDate)) {
+          setState(() {
+            isActivated = true;
+            isLoading = false;
+          });
+          return;
+        }
+      }
+
+      // Online Firestore Check
+      await verifyLicenseOnline(silent: true);
+    } catch (e) {
       setState(() {
-        isActivated = false;
+        isLoading = false;
       });
     }
   }
 
-  Future<void> verifyAndActivate() async {
-    if (secretKeyController.text == "1234") {
+  Future<void> verifyLicenseOnline({bool silent = false}) async {
+    String key = licenseKeyController.text.trim();
+    if (key.isEmpty) {
       final prefs = await SharedPreferences.getInstance();
-      DateTime expiryDate = DateTime.now().add(const Duration(days: 90));
-      
-      await prefs.setBool('is_activated', true);
-      await prefs.setString('expiry_date', expiryDate.toIso8601String());
+      key = prefs.getString('saved_license_key') ?? '';
+    }
 
-      setState(() {
-        isActivated = true;
+    if (key.isEmpty) {
+      setState({
+        isLoading = false,
+        isActivated = false,
       });
+      return;
+    }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Product Activated for 3 Months Successfully!")),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Incorrect Password! Try again.")),
-      );
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      DocumentSnapshot doc = await FirebaseFirestore.instance.collection('licenses').doc(key).get();
+
+      if (doc.exists) {
+        var data = doc.data() as Map<String, dynamic>;
+        String registeredDevice = data['device_id'] ?? '';
+        Timestamp expiryTimestamp = data['expiry_date'];
+        DateTime expiryDate = expiryTimestamp.toDate();
+
+        // Device Binding Check: Jodi device ID empty thake, tahole ei current device ID-ti bind kore nebo
+        if (registeredDevice.isEmpty) {
+          await FirebaseFirestore.instance.collection('licenses').doc(key).update({
+            'device_id': deviceId,
+          });
+          registeredDevice = deviceId;
+        }
+
+        // Check if device matches and not expired
+        if (registeredDevice == deviceId && DateTime.now().isBefore(expiryDate)) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('is_activated', true);
+          await prefs.setString('expiry_date', expiryDate.toIso8601String());
+          await prefs.setString('saved_license_key', key);
+
+          setState(() {
+            isActivated = true;
+            isLoading = false;
+          });
+
+          if (!silent) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("License Verified Successfully Online!")),
+            );
+          }
+        } else {
+          setState(() {
+            isActivated = false;
+            isLoading = false;
+          });
+          if (!silent) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Invalid Device or License Expired!")),
+            );
+          }
+        }
+      } else {
+        setState(() {
+          isActivated = false;
+          isLoading = false;
+        });
+        if (!silent) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("License Key not found in server!")),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+      if (!silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Connection Error: $e")),
+        );
+      }
     }
   }
 
@@ -291,12 +375,11 @@ class FuelFormScreenState extends State<FuelFormScreen> {
   }
 
   String getURLContents(String uri) {
-    // SECURITY CHECK: Jodi app unactivated/locked thake, tahole kono data jabe na!
     if (!isActivated) {
       setState(() {
-        lastSentData = "Blocked: App is locked! Password required.";
+        lastSentData = "Blocked: App is locked! Online License required.";
       });
-      return jsonEncode({"error": "App is locked. Authentication required."});
+      return jsonEncode({"error": "App is locked. Remote authentication required."});
     }
 
     Map<String, dynamic> data = {};
@@ -348,150 +431,153 @@ class FuelFormScreenState extends State<FuelFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Gas Smoke App Server")),
+      appBar: AppBar(title: const Text("Gas Smoke App Server (Secure)")),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8.0),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                border: Border.all(color: Colors.green),
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              child: Text(serverStatus, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 14)),
-            ),
-            const SizedBox(height: 10),
-            
-            // Password Box (Jodi activated na thake)
-            if (!isActivated) ...[
-              Container(
-                padding: const EdgeInsets.all(12.0),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.red),
-                  borderRadius: BorderRadius.circular(8.0),
-                  color: Colors.red.shade50,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("App Locked! Enter Password to Unlock (Valid for 3 Months):", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: secretKeyController,
-                            obscureText: true,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                              hintText: 'Enter Password',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        ElevatedButton(
-                          onPressed: verifyAndActivate,
-                          child: const Text("Unlock"),
-                        ),
-                      ],
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8.0),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      border: Border.all(color: Colors.green),
+                      borderRadius: BorderRadius.circular(8.0),
                     ),
+                    child: Text(serverStatus, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 14)),
+                  ),
+                  const SizedBox(height: 10),
+                  
+                  // License Input Box (Jodi activated na thake)
+                  if (!isActivated) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12.0),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.red),
+                        borderRadius: BorderRadius.circular(8.0),
+                        color: Colors.red.shade50,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text("App Locked! Enter Online License Key:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: licenseKeyController,
+                                  decoration: const InputDecoration(
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
+                                    hintText: 'Enter License Key (e.g. CLIENT001)',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              ElevatedButton(
+                                onPressed: () => verifyLicenseOnline(silent: false),
+                                child: const Text("Activate"),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 5),
+                          Text("Device ID: $deviceId", style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                   ],
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
 
-            // Jodi password sothik dewa hoy, tobei fuel selection options gulo show korbe
-            if (isActivated) ...[
-              Container(
-                padding: const EdgeInsets.all(8.0),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: RadioListTile<String>(
-                            title: const Text('2 or 3 wheeler', style: TextStyle(fontSize: 12)),
-                            value: '2or3wheeler',
-                            groupValue: selectedFuelType,
-                            onChanged: (val) => setState(() => selectedFuelType = val!),
+                  // Jodi license active thake, tobei fuel selection options gulo show korbe
+                  if (isActivated) ...[
+                    Container(
+                      padding: const EdgeInsets.all(8.0),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey),
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: RadioListTile<String>(
+                                  title: const Text('2 or 3 wheeler', style: TextStyle(fontSize: 12)),
+                                  value: '2or3wheeler',
+                                  groupValue: selectedFuelType,
+                                  onChanged: (val) => setState(() => selectedFuelType = val!),
+                                ),
+                              ),
+                              Expanded(
+                                child: RadioListTile<String>(
+                                  title: const Text('4 wheeler bs3', style: TextStyle(fontSize: 12)),
+                                  value: 'bs3',
+                                  groupValue: selectedFuelType,
+                                  onChanged: (val) => setState(() => selectedFuelType = val!),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        Expanded(
-                          child: RadioListTile<String>(
-                            title: const Text('4 wheeler bs3', style: TextStyle(fontSize: 12)),
-                            value: 'bs3',
-                            groupValue: selectedFuelType,
-                            onChanged: (val) => setState(() => selectedFuelType = val!),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: RadioListTile<String>(
+                                  title: const Text('Lambda', style: TextStyle(fontSize: 12)),
+                                  value: 'lambda',
+                                  groupValue: selectedFuelType,
+                                  onChanged: (val) => setState(() => selectedFuelType = val!),
+                                ),
+                              ),
+                              Expanded(
+                                child: RadioListTile<String>(
+                                  title: const Text('Diesel', style: TextStyle(fontSize: 12)),
+                                  value: 'diesel',
+                                  groupValue: selectedFuelType,
+                                  onChanged: (val) => setState(() => selectedFuelType = val!),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: RadioListTile<String>(
-                            title: const Text('Lambda', style: TextStyle(fontSize: 12)),
-                            value: 'lambda',
-                            groupValue: selectedFuelType,
-                            onChanged: (val) => setState(() => selectedFuelType = val!),
-                          ),
-                        ),
-                        Expanded(
-                          child: RadioListTile<String>(
-                            title: const Text('Diesel', style: TextStyle(fontSize: 12)),
-                            value: 'diesel',
-                            groupValue: selectedFuelType,
-                            onChanged: (val) => setState(() => selectedFuelType = val!),
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 10),
+                    const Text("Last Sent Data to Website:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                    const SizedBox(height: 5),
+                    Container(
+                      height: 70,
+                      padding: const EdgeInsets.all(8.0),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        border: Border.all(color: Colors.blue.shade200),
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                      child: SingleChildScrollView(
+                        child: Text(lastSentData, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
+                      ),
                     ),
+                    const SizedBox(height: 10),
                   ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              const Text("Last Sent Data to Website:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-              const SizedBox(height: 5),
-              Container(
-                height: 70,
-                padding: const EdgeInsets.all(8.0),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  border: Border.all(color: Colors.blue.shade200),
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                child: SingleChildScrollView(
-                  child: Text(lastSentData, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
 
-            const Text("Incoming Server Requests Log:", style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 5),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(8.0),
-                color: Colors.black12,
-                child: ListView.builder(
-                  itemCount: logMessages.length,
-                  itemBuilder: (context, index) {
-                    return Text(logMessages[index], style: const TextStyle(fontFamily: 'monospace', fontSize: 11));
-                  },
-                ),
+                  const Text("Incoming Server Requests Log:", style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 5),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(8.0),
+                      color: Colors.black12,
+                      child: ListView.builder(
+                        itemCount: logMessages.length,
+                        itemBuilder: (context, index) {
+                          return Text(logMessages[index], style: const TextStyle(fontFamily: 'monospace', fontSize: 11));
+                        },
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
