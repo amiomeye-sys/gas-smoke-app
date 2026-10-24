@@ -1,3 +1,8 @@
+plugins {
+    // Firebase Google Services Plugin add kora holo
+    id("com.google.gms.google-services") version "4.4.1" apply false
+}
+
 allprojects {
     repositories {
         google()
