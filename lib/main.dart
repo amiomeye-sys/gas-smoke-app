@@ -11,7 +11,15 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: "AIzaSyDIibBBvHyl9QsLihbODZWKQbF8TK9jGn8", // Firebase Console থেকে আপনার প্রজেক্টের API Key এখানে বসিয়ে দিন
+          appId: "1:384435208754:android:9673b555c0ce1f1a3722b",
+          messagingSenderId: "384435208754",
+          projectId: "gassmokelicensing",
+          storageBucket: "gassmokelicensing.appspot.com",
+        ),
+      );
     }
   } catch (e) {
     debugPrint("Firebase Init Error: $e");
@@ -135,7 +143,15 @@ class FuelFormScreenState extends State<FuelFormScreen> {
 
     try {
       if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp();
+        await Firebase.initializeApp(
+          options: const FirebaseOptions(
+            apiKey: "YOUR_API_KEY_HERE",
+            appId: "1:384435208754:android:9673b555c0ce1f1a3722b",
+            messagingSenderId: "384435208754",
+            projectId: "gassmokelicensing",
+            storageBucket: "gassmokelicensing.appspot.com",
+          ),
+        );
       }
 
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('licenses').doc(key).get();
