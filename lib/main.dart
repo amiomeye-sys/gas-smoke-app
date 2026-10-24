@@ -51,14 +51,12 @@ class FuelFormScreen extends StatefulWidget {
 }
 
 class FuelFormScreenState extends State<FuelFormScreen> {
-  String selectedFuelType = 'lambda'; // Default to lambda
+  String selectedFuelType = 'lambda';
   int randomNo = 1000;
   final TextEditingController licenseKeyController = TextEditingController();
   bool isActivated = false;
   bool isLoading = true;
   HttpServer? _server;
-  String serverStatus = 'Server Starting...';
-  List<String> logMessages = [];
   String lastSentData = 'No data sent yet';
   String deviceId = '';
   int lambdaCount = 0;
@@ -222,14 +220,9 @@ class FuelFormScreenState extends State<FuelFormScreen> {
   Future<void> startLocalServer() async {
     try {
       _server = await HttpServer.bind(InternetAddress.anyIPv4, 5555);
-      setState(() {
-        serverStatus = 'Server Running on port 5555';
-      });
 
       _server!.listen((HttpRequest request) {
         String path = request.uri.path;
-        addLog('Incoming request: $path');
-        
         String jsonResponse = getURLContents(path);
         
         request.response
@@ -240,17 +233,8 @@ class FuelFormScreenState extends State<FuelFormScreen> {
           ..close();
       });
     } catch (e) {
-      setState(() {
-        serverStatus = 'Server Error: $e';
-      });
+      debugPrint("Server Error: $e");
     }
-  }
-
-  void addLog(String msg) {
-    setState(() {
-      logMessages.insert(0, '${DateTime.now().toLocal().toString().split('.').first}: $msg');
-      if (logMessages.length > 50) logMessages.removeLast();
-    });
   }
 
   double kval(double hu) {
@@ -369,33 +353,31 @@ class FuelFormScreenState extends State<FuelFormScreen> {
     Map<String, dynamic> data = {};
     
     if (uri == "/i3sys/gas") {
-      if (selectedFuelType == 'diesel') {
+      if (selectedFuelType != 'lambda') {
         setState(() {
-          lastSentData = "Blocked: Gas requested but Diesel selected!";
+          lastSentData = "Blocked: Gas request received but Diesel is selected!";
         });
-        return jsonEncode({"error": "Invalid fuel type selection for gas endpoint"});
+        return jsonEncode({"error": "Gas endpoint requires Lambda selection"});
       }
 
-      if (selectedFuelType == 'lambda') {
-        if (lambdaCount > 1) lambdaCount = 0;
-        if (lambdaCount == 0) {
-          data = getRandomLambdaIdleData();
-        } else {
-          data = getRandomLambdaHighData();
-        }
-        lambdaCount++;
+      if (lambdaCount > 1) lambdaCount = 0;
+      if (lambdaCount == 0) {
+        data = getRandomLambdaIdleData();
+      } else {
+        data = getRandomLambdaHighData();
       }
+      lambdaCount++;
+
     } else if (uri == "/i3sys/smoke") {
       if (selectedFuelType != 'diesel') {
         setState(() {
-          lastSentData = "Blocked: Smoke requested but Lambda selected!";
+          lastSentData = "Blocked: Smoke request received but Lambda is selected!";
         });
-        return jsonEncode({"error": "Invalid fuel type selection for smoke endpoint"});
+        return jsonEncode({"error": "Smoke endpoint requires Diesel selection"});
       }
 
-      if (selectedFuelType == 'diesel') {
-        data = getRandomDieselData();
-      }
+      data = getRandomDieselData();
+
     } else {
       return jsonEncode({"error": "Unknown endpoint"});
     }
@@ -419,17 +401,6 @@ class FuelFormScreenState extends State<FuelFormScreen> {
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8.0),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      border: Border.all(color: Colors.green),
-                      borderRadius: BorderRadius.circular(8.0),
-                    ),
-                    child: Text(serverStatus, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 14)),
-                  ),
-                  const SizedBox(height: 10),
-                  
                   if (!isActivated) ...[
                     Container(
                       padding: const EdgeInsets.all(12.0),
@@ -441,7 +412,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text("App Locked! Enter Online License Key:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                          const Text("Login Password", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
                           const SizedBox(height: 8),
                           Row(
                             children: [
@@ -451,7 +422,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                                   decoration: const InputDecoration(
                                     border: OutlineInputBorder(),
                                     isDense: true,
-                                    hintText: 'Enter License Key (e.g. CLIENT001)',
+                                    hintText: 'Enter Password',
                                   ),
                                 ),
                               ),
@@ -462,8 +433,6 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 5),
-                          Text("Device ID: $deviceId", style: const TextStyle(fontSize: 10, color: Colors.grey)),
                         ],
                       ),
                     ),
@@ -502,7 +471,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                     const Text("Last Sent Data to Website:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
                     const SizedBox(height: 5),
                     Container(
-                      height: 70,
+                      height: 100,
                       padding: const EdgeInsets.all(8.0),
                       decoration: BoxDecoration(
                         color: Colors.blue.shade50,
@@ -513,23 +482,7 @@ class FuelFormScreenState extends State<FuelFormScreen> {
                         child: Text(lastSentData, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
                       ),
                     ),
-                    const SizedBox(height: 10),
                   ],
-
-                  const Text("Incoming Server Requests Log:", style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 5),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(8.0),
-                      color: Colors.black12,
-                      child: ListView.builder(
-                        itemCount: logMessages.length,
-                        itemBuilder: (context, index) {
-                          return Text(logMessages[index], style: const TextStyle(fontFamily: 'monospace', fontSize: 11));
-                        },
-                      ),
-                    ),
-                  ),
                 ],
               ),
       ),
