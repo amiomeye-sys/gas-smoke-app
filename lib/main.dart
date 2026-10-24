@@ -10,7 +10,9 @@ import 'package:device_info_plus/device_info_plus.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await Firebase.initializeApp();
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp();
+    }
   } catch (e) {
     debugPrint("Firebase Init Error: $e");
   }
@@ -132,6 +134,10 @@ class FuelFormScreenState extends State<FuelFormScreen> {
     });
 
     try {
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp();
+      }
+
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('licenses').doc(key).get();
 
       if (doc.exists) {
