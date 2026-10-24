@@ -9,7 +9,11 @@ import 'package:device_info_plus/device_info_plus.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint("Firebase Init Error: $e");
+  }
   runApp(const MyApp());
 }
 
@@ -19,6 +23,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Gas Smoke Simulator Server',
       theme: ThemeData(
         primarySwatch: Colors.blue,
@@ -82,6 +87,11 @@ class FuelFormScreenState extends State<FuelFormScreen> {
       final prefs = await SharedPreferences.getInstance();
       bool localActivated = prefs.getBool('is_activated') ?? false;
       String? expiryStr = prefs.getString('expiry_date');
+      String? savedKey = prefs.getString('saved_license_key');
+
+      if (savedKey != null) {
+        licenseKeyController.text = savedKey;
+      }
 
       if (localActivated && expiryStr != null) {
         DateTime expiryDate = DateTime.parse(expiryStr);
